@@ -479,6 +479,26 @@ extension VersionSpecifier: Scannable {
 	}
 }
 
+extension VersionSpecifier {
+  public func isStricter(than specifier: VersionSpecifier) -> Bool {
+    switch (self, specifier) {
+      case (.exactly, .exactly), (.gitReference, .gitReference),
+           (.exactly, .gitReference), (.gitReference, .exactly):
+        return false
+
+      case let (.atLeast(lv), .atLeast(rv)), let (.compatibleWith(lv), .compatibleWith(rv)),
+           let (.compatibleWith(lv), .atLeast(rv)), let (.atLeast(lv), .compatibleWith(rv)):
+        return lv.discardingBuildMetadata > rv.discardingBuildMetadata
+
+      case (.exactly, _), (.gitReference, _), (_, .any):
+        return true
+
+      case (.any, _), (_, .exactly), (_, .gitReference):
+        return false
+    }
+  }
+}
+
 extension VersionSpecifier: CustomStringConvertible {
 	public var description: String {
 		switch self {

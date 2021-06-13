@@ -506,20 +506,37 @@ public final class Project { // swiftlint:disable:this type_body_length
 		}
 	}
 
+	/// This structure is used to select one of pre-built resolvers
+	public enum ResolverKind {
+		case `default`
+		case new
+		case simple
+	}
+
+	private func resolver(from resolverKind: ResolverKind) -> ResolverProtocol {
+		let resolverType: ResolverProtocol.Type
+		switch resolverKind {
+			case .default:
+				resolverType = Resolver.self
+			case .new:
+				resolverType = NewResolver.self
+			case .simple:
+				resolverType = SimpleResolver.self
+		}
+		return resolverType.init(
+			versionsForDependency: versions(for:),
+			dependenciesForDependency: dependencies,
+			resolvedGitReference: resolvedGitReference
+		)
+	}
+
 	public typealias OutdatedDependency = (Dependency, PinnedVersion, PinnedVersion, PinnedVersion)
 	/// Attempts to determine which of the project's Carthage
 	/// dependencies are out of date.
 	///
 	/// This will fetch dependency repositories as necessary, but will not check
 	/// them out into the project's working directory.
-	public func outdatedDependencies(_ includeNestedDependencies: Bool, useNewResolver: Bool = true, resolver: ResolverProtocol? = nil) -> SignalProducer<[OutdatedDependency], CarthageError> {
-		let resolverType: ResolverProtocol.Type
-		if useNewResolver {
-			resolverType = NewResolver.self
-		} else {
-			resolverType = Resolver.self
-		}
-
+	public func outdatedDependencies(_ includeNestedDependencies: Bool, resolverKind: ResolverKind = .new, resolver: ResolverProtocol? = nil) -> SignalProducer<[OutdatedDependency], CarthageError> {
 		let dependencies: (Dependency, PinnedVersion) -> SignalProducer<(Dependency, VersionSpecifier), CarthageError>
 		if includeNestedDependencies {
 			dependencies = self.dependencies(for:version:)
@@ -527,11 +544,7 @@ public final class Project { // swiftlint:disable:this type_body_length
 			dependencies = { _, _ in .empty }
 		}
 
-		let resolver = resolver ?? resolverType.init(
-			versionsForDependency: versions(for:),
-			dependenciesForDependency: dependencies,
-			resolvedGitReference: resolvedGitReference
-		)
+		let resolver = resolver ?? self.resolver(from: resolverKind)
 
 		let outdatedDependencies = SignalProducer
 			.combineLatest(
@@ -577,21 +590,11 @@ public final class Project { // swiftlint:disable:this type_body_length
 	/// directory checkouts if the given parameter is true.
 	public func updateDependencies(
 		shouldCheckout: Bool = true,
-		useNewResolver: Bool = false,
+		resolverKind: ResolverKind = .default,
 		buildOptions: BuildOptions,
 		dependenciesToUpdate: [String]? = nil
 	) -> SignalProducer<(), CarthageError> {
-		let resolverType: ResolverProtocol.Type
-		if useNewResolver {
-			resolverType = NewResolver.self
-		} else {
-			resolverType = Resolver.self
-		}
-		let resolver = resolverType.init(
-			versionsForDependency: versions(for:),
-			dependenciesForDependency: dependencies(for:version:),
-			resolvedGitReference: resolvedGitReference
-		)
+		let resolver = self.resolver(from: resolverKind)
 
 		return updatedResolvedCartfile(dependenciesToUpdate, resolver: resolver)
 			.attemptMap { resolvedCartfile -> Result<(), CarthageError> in

@@ -19,7 +19,7 @@ public struct BootstrapCommand: CommandProtocol {
 					utica.println(formatting.bullets + "No Cartfile.resolved found, updating dependencies")
 					return project.updateDependencies(
 						shouldCheckout: options.checkoutAfterUpdate,
-						useNewResolver: options.useNewResolver,
+						resolverKind: options.useNewResolver ? .new : options.useSimpleResolver ? .simple : .default,
 						buildOptions: options.buildOptions)
 				}
 
