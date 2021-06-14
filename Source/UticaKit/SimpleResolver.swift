@@ -89,18 +89,23 @@ internal struct SimpleResolverState {
 
 extension SimpleResolverState {
   internal func processCandidates(
-    with dependenciesForDependency: @escaping (Dependency, PinnedVersion) -> SignalProducer<(Dependency, VersionSpecifier), CarthageError>
+    with dependenciesForDependency: @escaping (Dependency, PinnedVersion) -> SignalProducer<(Dependency, VersionSpecifier), CarthageError>,
+    resolvedGitReference: @escaping (Dependency, String) -> SignalProducer<PinnedVersion, CarthageError>
   ) -> SignalProducer<SimpleResolverState, CarthageError> {
-    collectDependencies(for: candidates, dependenciesForDependency: dependenciesForDependency)
-      .attemptMap { dependencyMap in
-        Result(catching: {
-          var newRequirements = requirements
-          for (dependency, requirements) in dependencyMap {
-            try newRequirements.merge(with: requirements, requiredBy: dependency)
-          }
-          return SimpleResolverState(candidates: candidates, requirements: newRequirements, resolved: resolved)
-        })
-      }
+    collectDependencies(
+      for: candidates,
+      dependenciesForDependency: dependenciesForDependency,
+      resolvedGitReference: resolvedGitReference
+    )
+    .attemptMap { dependencyMap in
+      Result(catching: {
+        var newRequirements = requirements
+        for (dependency, requirements) in dependencyMap {
+          try newRequirements.merge(with: requirements, requiredBy: dependency)
+        }
+        return SimpleResolverState(candidates: candidates, requirements: newRequirements, resolved: resolved)
+      })
+    }
   }
 
   internal func processResolved() -> SignalProducer<SimpleResolverState, CarthageError> {
@@ -134,7 +139,15 @@ extension SimpleResolverState {
     versionsForDependency: (Dependency) -> SignalProducer<PinnedVersion, CarthageError>,
     resolvedGitReference: (Dependency, String) -> SignalProducer<PinnedVersion, CarthageError>
   ) -> SignalProducer<[PinnedVersion], CarthageError> {
-    versionsForDependency(dependency)
+    let versionProducer: SignalProducer<PinnedVersion, CarthageError>
+    switch requirements.versionSpecifier(for: dependency) {
+      case let .gitReference(ref):
+        versionProducer = resolvedGitReference(dependency, ref)
+      default:
+        versionProducer = versionsForDependency(dependency)
+    }
+
+    return versionProducer
       .filter { requirements.isSatisfied(by: $0, for: dependency) }
       .collect()
       .attempt {
@@ -176,11 +189,19 @@ extension SimpleResolverState {
 
   private func collectDependencies(
     for dependencies: Set<DependencyDescriptor>,
-    dependenciesForDependency: @escaping (Dependency, PinnedVersion) -> SignalProducer<(Dependency, VersionSpecifier), CarthageError>
+    dependenciesForDependency: @escaping (Dependency, PinnedVersion) -> SignalProducer<(Dependency, VersionSpecifier), CarthageError>,
+    resolvedGitReference: @escaping (Dependency, String) -> SignalProducer<PinnedVersion, CarthageError>
   ) -> SignalProducer<[Dependency : [(Dependency, VersionSpecifier)]], CarthageError> {
     SignalProducer(dependencies)
       .flatMap(.merge) { descriptor in
         dependenciesForDependency(descriptor.dependency, descriptor.version)
+          .flatMap(.concat) { dependency, specifier -> SignalProducer<(Dependency, VersionSpecifier), CarthageError> in
+            if case let .gitReference(ref) = specifier {
+              return resolvedGitReference(dependency, ref)
+                .map { (dependency, VersionSpecifier.gitReference($0.commitish)) }
+            }
+            return SignalProducer(value: (dependency, specifier))
+          }
           .map { (descriptor, $0, $1) }
       }
       .collect()
@@ -236,7 +257,7 @@ public struct SimpleResolver: ResolverProtocol {
   }
 
   private func process(state: SimpleResolverState) -> SignalProducer<SimpleResolverState, CarthageError> {
-    state.processCandidates(with: dependenciesForDependency)
+    state.processCandidates(with: dependenciesForDependency, resolvedGitReference: resolvedGitReference)
       .flatMap(.concat) { $0.processResolved() }
       .flatMap(.concat) { self.resolve(with: $0) }
   }
