@@ -58,47 +58,57 @@ public func mergeIntoXCFramework(
 	let baseArguments = ["xcodebuild", "-create-xcframework", "-allow-internal-distribution", "-output", outputURL.path]
 	let newLibraryArguments = ["-framework", framework.path] + debugSymbols.flatMap { ["-debug-symbols", $0.path] }
 
-	let buildExistingLibraryArguments: SignalProducer<[String], NoError> = SignalProducer { () throws -> XCFramework in
-		// Load an existing xcframework at xcframeworkURL
-		let decoder = PropertyListDecoder()
-		let infoData = try Data(contentsOf: xcframeworkURL.appendingPathComponent("Info.plist"))
-		return try decoder.decode(XCFramework.self, from: infoData)
-	}
-	.flatMap(.concat) { xcframework -> SignalProducer<XCFramework.Library, AnyError> in
-		// Only persist frameworks which _won't_ be overwritten by the new library
-		return SignalProducer(xcframework.availableLibraries.filter { library in
-			library.supportedPlatform != platformName || library.supportedPlatformVariant != variant
-		})
-	}
-	.flatMap(.concat) { library -> SignalProducer<String, AnyError> in
-		// Discover and include dSYMs and bcsymbolmaps for each library
-		let libraryURL = xcframeworkURL.appendingPathComponent(library.identifier)
-		var arguments = ["-framework", libraryURL.appendingPathComponent(library.path).path]
-
-		if let debugSymbolsPath = library.debugSymbolsPath,
-			 let dsyms = try? FileManager.default.contentsOfDirectory(
-				at: libraryURL.appendingPathComponent(debugSymbolsPath),
-				includingPropertiesForKeys: nil
-			 ) {
-			arguments += dsyms.flatMap { ["-debug-symbols", $0.path] }
-		}
-
-		if let bitcodeSymbolMapsPath = library.bitcodeSymbolMapsPath,
-			 let bcsymbolmaps = try? FileManager.default.contentsOfDirectory(
-				at: libraryURL.appendingPathComponent(bitcodeSymbolMapsPath),
-				includingPropertiesForKeys: nil
-			 ) {
-			arguments += bcsymbolmaps.flatMap { ["-debug-symbols", $0.path] }
-		}
-		return SignalProducer(arguments)
-	}
-	.collect()
-	.flatMapError { _ in SignalProducer(value: []) }
+  let buildExistingLibraryArguments: SignalProducer<[String], Never> = SignalProducer {
+    Result(catching: { try loadXCFramework(url: xcframeworkURL) })
+  }
+  .flatMap(.concat) { framework -> SignalProducer<XCFramework.Library, Swift.Error> in
+    SignalProducer(framework.availableLibraries.filter { library in
+      library.supportedPlatform != platformName || library.supportedPlatformVariant != variant
+    })
+  }
+  .attemptMap { library in
+    Result(catching: { try buildArguments(from: library, baseUrl: xcframeworkURL) })
+  }
+  .flatMapError { _ in SignalProducer(value: []) }
 
 	return buildExistingLibraryArguments.promoteError().flatMap(.concat) { existingLibraryArguments in
 		let arguments = baseArguments + newLibraryArguments + existingLibraryArguments
 		return Task("/usr/bin/xcrun", arguments: arguments).launch().ignoreTaskData().map { _ in outputURL }
 	}
+}
+
+
+/// Attempts to load XCFramework at url
+///
+/// - Parameter url: URL to XCFramework
+/// - Returns: `XCFramework` entity
+private func loadXCFramework(url: URL) throws -> XCFramework {
+  let decoder = PropertyListDecoder()
+  let infoData = try Data(contentsOf: url.appendingPathComponent("Info.plist"))
+  return try decoder.decode(XCFramework.self, from: infoData)
+}
+
+/// Attempts to build arguments for each library
+private func buildArguments(from library: XCFramework.Library, baseUrl: URL) throws -> [String] {
+  let libraryURL = baseUrl.appendingPathComponent(library.identifier)
+  var arguments = ["-framework", libraryURL.appendingPathComponent(library.path).path]
+
+  if let debugSymbolsPath = library.debugSymbolsPath {
+    let dsyms = try FileManager.default.contentsOfDirectory(
+     at: libraryURL.appendingPathComponent(debugSymbolsPath),
+     includingPropertiesForKeys: nil
+    )
+    arguments += dsyms.flatMap { ["-debug-symbols", $0.path] }
+  }
+
+  if let bitcodeSymbolMapsPath = library.bitcodeSymbolMapsPath {
+    let bcsymbolmaps = try FileManager.default.contentsOfDirectory(
+      at: libraryURL.appendingPathComponent(bitcodeSymbolMapsPath),
+      includingPropertiesForKeys: nil
+    )
+    arguments += bcsymbolmaps.flatMap { ["-debug-symbols", $0.path] }
+  }
+  return arguments
 }
 
 struct XCFramework: Decodable {

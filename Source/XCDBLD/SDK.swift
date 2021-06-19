@@ -140,7 +140,7 @@ extension SDK {
 	/// - Note: Will, if available, use the version of `xcodebuild` from `DEVELOPER_DIR`.
 	/// - Note: Will omit SDKs — like DriverKit — where `canonicalName` and `platform`
 	///         do not share a common prefix.
-	public static let setFromJSONShowSDKs: SignalProducer<Set<SDK>?, NoError> =
+	public static let setFromJSONShowSDKs: SignalProducer<Set<SDK>?, Never> =
 		Task("/usr/bin/xcrun", arguments: ["xcodebuild", "-showsdks", "-json"])
 			.launch()
 			.materializeResults() // to map below and ignore errors
