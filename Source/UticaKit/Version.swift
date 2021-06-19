@@ -480,6 +480,7 @@ extension VersionSpecifier: Scannable {
 }
 
 extension VersionSpecifier {
+  /// Defines an order of strictness.
   public func isStricter(than specifier: VersionSpecifier) -> Bool {
     switch (self, specifier) {
       case (.exactly, .exactly), (.gitReference, .gitReference),
