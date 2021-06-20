@@ -1,0 +1,19 @@
+name: Integration tests
+on: 
+  pull_request:
+  push:
+    branches: [ master ]
+
+jobs:
+  integration_tests:
+    name: Integration tests
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v2 
+      - name: Install bats
+        run: HOMEBREW_NO_AUTO_UPDATE=1 brew install bats
+      - name: Build and Install utica
+        run: make install
+      - name: Run Integration tests
+        run: bats IntegrationTests
