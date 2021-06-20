@@ -11,43 +11,43 @@ teardown() {
     cd $BATS_TEST_DIRNAME
 }
 
-@test "carthage archive errors unless carthage build --no-skip-current has been run" {
-    run carthage archive
+@test "utica archive errors unless utica build --no-skip-current has been run" {
+    run utica archive
     [ "$status" -eq 1 ]
-    [ "$output" = "Could not find any copies of Result.framework. Make sure you're in the project's root and that the frameworks have already been built using 'carthage build --no-skip-current'." ]
+    [ "$output" = "Could not find any copies of Result.framework. Make sure you're in the project's root and that the frameworks have already been built using 'utica build --no-skip-current'." ]
 }
 
-@test "carthage archive after carthage build --no-skip-current produces a zipped framework of all frameworks" {
-    run carthage build --platform mac --no-skip-current
+@test "utica archive after utica build --no-skip-current produces a zipped framework of all frameworks" {
+    run utica build --platform mac --no-skip-current
     [ "$status" -eq 0 ]
-    run carthage archive
+    run utica archive
     [ "$status" -eq 0 ]
     [ -e Result.framework.zip ]
 }
 
-@test "carthage archive --output with a non-existing path ends with '/' should produce a zip file into the specified directory" {
-    run carthage build --platform mac --no-skip-current
+@test "utica archive --output with a non-existing path ends with '/' should produce a zip file into the specified directory" {
+    run utica build --platform mac --no-skip-current
     [ "$status" -eq 0 ]
     rm -rf FooBar
-    run carthage archive --output FooBar/
+    run utica archive --output FooBar/
     [ "$status" -eq 0 ]
     [ -e FooBar/Result.framework.zip ]
 }
 
-@test "carthage archive --output with an existing directory path should produce a zip file into the specified directory" {
-    run carthage build --platform mac --no-skip-current
+@test "utica archive --output with an existing directory path should produce a zip file into the specified directory" {
+    run utica build --platform mac --no-skip-current
     [ "$status" -eq 0 ]
     mkdir FooBar
-    run carthage archive --output FooBar
+    run utica archive --output FooBar
     [ "$status" -eq 0 ]
     [ -e FooBar/Result.framework.zip ]
 }
 
-@test "carthage archive --output with a file path should produce a zip file at the given path" {
-    run carthage build --platform mac --no-skip-current
+@test "utica archive --output with a file path should produce a zip file at the given path" {
+    run utica build --platform mac --no-skip-current
     [ "$status" -eq 0 ]
     rm -rf FooBar
-    run carthage archive --output FooBar/GreatName.framework.zip
+    run utica archive --output FooBar/GreatName.framework.zip
     [ "$status" -eq 0 ]
     [ -e FooBar/GreatName.framework.zip ]
 }
