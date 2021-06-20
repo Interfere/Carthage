@@ -1,0 +1,15 @@
+name: Unit tests
+on: 
+  pull_request:
+  push:
+    branches: [ master ]
+
+jobs:
+  unit_tests:
+    name: Unit tests
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v2 
+      - name: Build and Run unit tests
+        run: make test
