@@ -11,5 +11,12 @@ jobs:
 
     steps:
       - uses: actions/checkout@v2 
+      - name: Cache SwiftPM
+        uses: actions/cache@v2
+        with:
+          path: |
+           .build/checkouts
+           .build/repositories
+          key: ${{ runner.os }}-spm-${{ hashFiles('**/Package.resolved') }}
       - name: Build and Run unit tests
         run: make test

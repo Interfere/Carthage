@@ -11,6 +11,13 @@ jobs:
 
     steps:
       - uses: actions/checkout@v2 
+      - name: Cache SwiftPM
+        uses: actions/cache@v2
+        with:
+          path: |
+           .build/checkouts
+           .build/repositories
+          key: ${{ runner.os }}-spm-${{ hashFiles('**/Package.resolved') }}
       - name: Install bats
         run: HOMEBREW_NO_AUTO_UPDATE=1 brew install bats
       - name: Build and Install utica
