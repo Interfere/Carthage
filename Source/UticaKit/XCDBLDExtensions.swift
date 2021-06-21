@@ -51,7 +51,7 @@ extension ProjectLocator {
 					}
 					.map { _, url in url }
 			}
-			.filterMap { url -> ProjectLocator? in
+      .compactMap { url -> ProjectLocator? in
 				if let uti = url.typeIdentifier.value {
 					if UTTypeConformsTo(uti as CFString, "com.apple.dt.document.workspace" as CFString) {
 						return .workspace(url)

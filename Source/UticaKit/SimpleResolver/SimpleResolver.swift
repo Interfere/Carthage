@@ -27,7 +27,7 @@ import Commandant
 /// After the third step algorithm calls itself recursively. Termination condition is checked after the __Step 1__:
 /// if the list of `candidates` is empty, a list of `resolved` dependencies is returned to the caller.
 ///
-public struct SimpleResolver: ResolverProtocol {
+public struct SimpleResolver: Resolver {
 	private let versionsForDependency: (Dependency) -> SignalProducer<PinnedVersion, CarthageError>
 	private let resolvedGitReference: (Dependency, String) -> SignalProducer<PinnedVersion, CarthageError>
 	private let dependenciesForDependency: (Dependency, PinnedVersion) -> SignalProducer<(Dependency, VersionSpecifier), CarthageError>
@@ -54,19 +54,54 @@ public struct SimpleResolver: ResolverProtocol {
   /// dependency in `dependencies`, and all nested dependencies thereof.
   ///
   /// Sends a dictionary with each dependency and its resolved version.
+  ///
+  /// - Parameter dependencies: map of dependencies from Cartfile
+  /// - Parameter lastResolved: map of dependencies and versions from Cartfile.resolved
+  /// - Parameter dependenciesToUpdate: List of dependencies to update
+  ///
+  /// - Returns: `SignalProducer` that emits either a list of resolved dependencies or `CarthageError`
 	public func resolve(
 		dependencies: [Dependency : VersionSpecifier],
-		lastResolved: [Dependency : PinnedVersion]?,
-		dependenciesToUpdate: [String]?
+		lastResolved: [Dependency : PinnedVersion],
+		dependenciesToUpdate: [String]
 	) -> SignalProducer<[Dependency : PinnedVersion], CarthageError> {
-    resolve(
+    guard
+      validate(dependencies: dependencies, lastResolved: lastResolved, dependenciesToUpdate: Set(dependenciesToUpdate))
+    else {
+      return SignalProducer(error: CarthageError.unsatisfiableDependencyList(dependenciesToUpdate))
+    }
+    return resolve(
       with: initialState(
-        from: buildRequirements(from: dependencies, lastResolved: lastResolved, dependenciesToUpdate: dependenciesToUpdate),
-        filter: buildFilter(lastResolved: lastResolved, dependenciesToUpdate: dependenciesToUpdate)
+        from: buildRequirements(from: dependencies, lastResolved: lastResolved, dependenciesToUpdate: Set(dependenciesToUpdate)),
+        filter: buildFilter(lastResolved: lastResolved, dependenciesToUpdate: Set(dependenciesToUpdate))
       )
     )
     .map(\.resolved)
 	}
+
+  /// Validates input parameters.
+  ///
+  /// Determines if the resolver is able to simultaneously satisfy the list of `dependenciesToUpdate`
+  /// and the map of `dependencies` with respect to the `lastResolved`.
+  ///
+  /// - Parameter dependencies: map of dependencies from Cartfile
+  /// - Parameter lastResolved: map of dependencies and versions from Cartfile.resolved
+  /// - Parameter dependenciesToUpdate: List of dependencies to update
+  ///
+  /// - Returns: `true` if arguments are valid
+  private func validate(
+    dependencies: [Dependency : VersionSpecifier],
+    lastResolved: [Dependency : PinnedVersion],
+    dependenciesToUpdate: Set<String>
+  ) -> Bool {
+    guard !dependenciesToUpdate.isEmpty, !lastResolved.isEmpty else {
+      return true
+    }
+
+    return dependencies.allSatisfy {
+      lastResolved[$0.key].map($0.value.isSatisfied(by:)) ?? true || dependenciesToUpdate.contains($0.key.name)
+    }
+  }
 
   /// Main depenedency resolution cycle.
   ///
@@ -142,15 +177,10 @@ public struct SimpleResolver: ResolverProtocol {
   /// - Returns: `requirements` for initial `state`.
   private func buildRequirements(
     from dependencies: [Dependency : VersionSpecifier],
-    lastResolved: [Dependency : PinnedVersion]?,
-    dependenciesToUpdate: [String]?
+    lastResolved: [Dependency : PinnedVersion],
+    dependenciesToUpdate: Set<String>
   ) -> DependencyRequirements {
-    guard
-      let lastResolved = lastResolved,
-      let dependenciesToUpdate = dependenciesToUpdate.map(Set.init),
-      !lastResolved.isEmpty,
-      !dependenciesToUpdate.isEmpty
-    else {
+    guard !lastResolved.isEmpty, !dependenciesToUpdate.isEmpty else {
       return DependencyRequirements(dependencies: dependencies)
     }
 
@@ -170,15 +200,10 @@ public struct SimpleResolver: ResolverProtocol {
   /// - Parameter dependenciesToUpdate: list of dependencies to resolve
   /// - Returns: `filter` for initial `state`
   private func buildFilter(
-    lastResolved: [Dependency : PinnedVersion]?,
-    dependenciesToUpdate: [String]?
+    lastResolved: [Dependency : PinnedVersion],
+    dependenciesToUpdate: Set<String>
   ) -> (DependencyDescriptor, VersionSpecifier) -> Bool {
-    guard
-      let lastResolved = lastResolved,
-      let dependenciesToUpdate = dependenciesToUpdate.map(Set.init),
-      !lastResolved.isEmpty,
-      !dependenciesToUpdate.isEmpty
-    else {
+    guard !lastResolved.isEmpty, !dependenciesToUpdate.isEmpty else {
       return defaultFiler
     }
 

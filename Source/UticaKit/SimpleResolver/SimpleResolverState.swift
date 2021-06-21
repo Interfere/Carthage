@@ -197,7 +197,7 @@ fileprivate enum Helper {
           selectCandidate(for: dependency, availableVersions: $0, filter: filter)
         }
       }
-      .filterMap { $0 }
+      .compactMap { $0 }
       .collect()
       .map(Set.init)
   }
@@ -250,7 +250,7 @@ fileprivate enum Helper {
     for dependency: Dependency,
     availableVersions: [PinnedVersion],
     filter: @escaping (DependencyDescriptor) -> Bool
-  ) -> SignalProducer<DependencyDescriptor?, NoError> {
+  ) -> SignalProducer<DependencyDescriptor?, Never> {
     SignalProducer(availableVersions)
       .map { DependencyDescriptor(dependency: dependency, version: $0) }
       .filter(filter)
