@@ -52,15 +52,15 @@ teardown() {
 }
 
 carthage-and-check-project-directory() {
-	carthage $@
+	utica $@
 	[[ -d "$(project_directory)/Carthage/Checkouts/TestFramework1/Carthage/Checkouts/TestFramework2" ]]
 }
 
-@test "with conflicting checked-in directory in «Carthage/Checkouts» of dependency, carthage bootstrap should avoid writing there" {
+@test "with conflicting checked-in directory in «Carthage/Checkouts» of dependency, utica bootstrap should avoid writing there" {
 	carthage-and-check-project-directory bootstrap --no-build --no-use-binaries
 }
 
-@test "with conflicting checked-in directory in «Carthage/Checkouts» of dependency, carthage «bootstrap, update, update» should avoid writing there" {
+@test "with conflicting checked-in directory in «Carthage/Checkouts» of dependency, utica «bootstrap, update, update» should avoid writing there" {
 	carthage-and-check-project-directory bootstrap --no-build --no-use-binaries
 
 	carthage-and-check-project-directory update --no-build --no-use-binaries
@@ -68,7 +68,7 @@ carthage-and-check-project-directory() {
 	carthage-and-check-project-directory update --no-build --no-use-binaries
 }
 
-@test "with conflicting checked-in directory in «Carthage/Checkouts» of dependency of git-controlled project, carthage bootstrap should avoid writing there" {
+@test "with conflicting checked-in directory in «Carthage/Checkouts» of dependency of git-controlled project, utica bootstrap should avoid writing there" {
 	echo 'Carthage/Build' > .gitignore
 	git init && git-commit 'Initialize project.'
 

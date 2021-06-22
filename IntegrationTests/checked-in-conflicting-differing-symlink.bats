@@ -53,15 +53,15 @@ check-symlink() {
 }
 
 carthage-and-check-project-symlink() {
-	carthage $@
+	utica $@
 	check-symlink "$(project_directory)/Carthage/Checkouts/TestFramework1/Carthage/Checkouts/TestFramework2"
 }
 
-@test "with conflicting checked-in symlink in «Carthage/Checkouts» of dependency, carthage bootstrap should avoid writing there" {
+@test "with conflicting checked-in symlink in «Carthage/Checkouts» of dependency, utica bootstrap should avoid writing there" {
 	carthage-and-check-project-symlink bootstrap --no-build --no-use-binaries
 }
 
-@test "with conflicting checked-in symlink in «Carthage/Checkouts» of dependency, carthage «bootstrap, update, update» should avoid writing there" {
+@test "with conflicting checked-in symlink in «Carthage/Checkouts» of dependency, utica «bootstrap, update, update» should avoid writing there" {
 	carthage-and-check-project-symlink bootstrap --no-build --no-use-binaries
 
 	carthage-and-check-project-symlink update --no-build --no-use-binaries
@@ -69,7 +69,7 @@ carthage-and-check-project-symlink() {
 	carthage-and-check-project-symlink update --no-build --no-use-binaries
 }
 
-@test "with conflicting checked-in symlink in «Carthage/Checkouts» of dependency of git-controlled project, carthage bootstrap should avoid writing there" {
+@test "with conflicting checked-in symlink in «Carthage/Checkouts» of dependency of git-controlled project, utica bootstrap should avoid writing there" {
 	echo 'Carthage/Build' > .gitignore
 	git init && git-commit 'Initialize project.'
 

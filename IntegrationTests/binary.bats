@@ -11,12 +11,9 @@ teardown() {
     cd $BATS_TEST_DIRNAME
 }
 
-@test "carthage update builds everything (binary)" {
-    run carthage update --platform iOS
+@test "utica update builds everything (binary)" {
+    run utica update --platform iOS --valid-simulator-archs "i386 x86_64"
 
     [ "$status" -eq 0 ]
-    [ -d Carthage/Build/iOS/FirebaseAnalytics.framework ]
+    [ -d Carthage/Build/iOS/Firebase.framework ]
 }
-
-
-

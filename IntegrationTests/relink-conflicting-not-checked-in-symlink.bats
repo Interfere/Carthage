@@ -47,11 +47,11 @@ check-symlink() {
 }
 
 carthage-and-check-project-symlink() {
-	carthage $@
+	utica $@
 	check-symlink "$(project_directory)/Carthage/Checkouts/TestFramework1/Carthage/Checkouts/TestFramework2"
 }
 
-@test "with conflicting not-checked-in symlink in «Carthage/Checkouts» of dependency, carthage «bootstrap, update, update» should unlink, then write symlink there" {
+@test "with conflicting not-checked-in symlink in «Carthage/Checkouts» of dependency, utica «bootstrap, update, update» should unlink, then write symlink there" {
 	carthage-and-check-project-symlink bootstrap --no-build --no-use-binaries
 	# carthage has now created a symlink at $(project_directory)/Carthage/Checkouts/TestFramework1/Carthage/Checkouts/TestFramework2
 

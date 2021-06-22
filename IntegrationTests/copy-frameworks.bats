@@ -11,8 +11,8 @@ teardown() {
     cd $BATS_TEST_DIRNAME
 }
 
-@test "carthage copy-frameworks should work for all an app target, a unit test target, a UI test target and produce a valid xcarchive file" {
-    run carthage update --platform ios
+@test "utica copy-frameworks should work for all an app target, a unit test target, a UI test target and produce a valid xcarchive file" {
+    run utica update --platform ios --valid-simulator-archs "i386 x86_64"
     [ "$status" -eq 0 ]
 
     run xcodebuild clean build-for-testing -scheme CarthageCopyFrameworksFixture -sdk iphonesimulator -destination "name=iPhone 8"
