@@ -1,12 +1,12 @@
 #!/usr/bin/xcrun make -f
 
-CARTHAGE_TEMPORARY_FOLDER?=/tmp/Carthage.dst
+UTICA_TEMPORARY_FOLDER?=/tmp/Utica.dst
 PREFIX?=/usr/local
 
-INTERNAL_PACKAGE=CarthageApp.pkg
-OUTPUT_PACKAGE=Carthage.pkg
+INTERNAL_PACKAGE=UticaApp.pkg
+OUTPUT_PACKAGE=Utica.pkg
 
-CARTHAGE_EXECUTABLE=./.build/release/carthage
+UTICA_EXECUTABLE=./.build/release/utica
 BINARIES_FOLDER=$(PREFIX)/bin
 
 SWIFT_BUILD_FLAGS=--configuration release -Xswiftc -suppress-warnings
@@ -26,7 +26,7 @@ ZSH_COMMAND := ZDOTDIR='/var/empty' zsh -o NO_GLOBAL_RCS -c
 RM_SAFELY := $(ZSH_COMMAND) '[[ ! $${1:?} =~ "^[[:space:]]+\$$" ]] && [[ $${1:A} != "/" ]] && [[ $${\#} == "1" ]] && noglob rm -rf $${1:A}' --
 
 VERSION_STRING=$(shell git describe --abbrev=0 --tags)
-DISTRIBUTION_PLIST=Source/carthage/Distribution.plist
+DISTRIBUTION_PLIST=Source/utica/Distribution.plist
 
 RM=rm -f
 MKDIR=mkdir -p
@@ -45,24 +45,24 @@ clean:
 	swift package clean
 
 test:
-	$(RM_SAFELY) ./.build/debug/CarthagePackageTests.xctest
+	$(RM_SAFELY) ./.build/debug/UticaPackageTests.xctest
 	swift build --build-tests -Xswiftc -suppress-warnings
-	$(CP) -R Tests/CarthageKitTests/Resources ./.build/debug/CarthagePackageTests.xctest/Contents
-	$(CP) Tests/CarthageKitTests/fixtures/CartfilePrivateOnly.zip ./.build/debug/CarthagePackageTests.xctest/Contents/Resources
-	script/copy-fixtures ./.build/debug/CarthagePackageTests.xctest/Contents/Resources
+	$(CP) -R Tests/UticaKitTests/Resources ./.build/debug/UticaPackageTests.xctest/Contents
+	$(CP) Tests/UticaKitTests/fixtures/CartfilePrivateOnly.zip ./.build/debug/UticaPackageTests.xctest/Contents/Resources
+	script/copy-fixtures ./.build/debug/UticaPackageTests.xctest/Contents/Resources
 	swift test --skip-build
 
 installables:
 	swift build $(SWIFT_BUILD_FLAGS)
 
 package: installables
-	$(MKDIR) "$(CARTHAGE_TEMPORARY_FOLDER)$(BINARIES_FOLDER)"
-	$(CP) "$(CARTHAGE_EXECUTABLE)" "$(CARTHAGE_TEMPORARY_FOLDER)$(BINARIES_FOLDER)"
+	$(MKDIR) "$(UTICA_TEMPORARY_FOLDER)$(BINARIES_FOLDER)"
+	$(CP) "$(UTICA_EXECUTABLE)" "$(UTICA_TEMPORARY_FOLDER)$(BINARIES_FOLDER)"
 	
 	pkgbuild \
-		--identifier "org.carthage.carthage" \
+		--identifier "org.utica.utica" \
 		--install-location "/" \
-		--root "$(CARTHAGE_TEMPORARY_FOLDER)" \
+		--root "$(UTICA_TEMPORARY_FOLDER)" \
 		--version "$(VERSION_STRING)" \
 		"$(INTERNAL_PACKAGE)"
 
@@ -73,14 +73,14 @@ package: installables
 
 prefix_install: installables
 	$(MKDIR) "$(BINARIES_FOLDER)"
-	$(CP) -f "$(CARTHAGE_EXECUTABLE)" "$(BINARIES_FOLDER)/"
+	$(CP) -f "$(UTICA_EXECUTABLE)" "$(BINARIES_FOLDER)/"
 
 install: installables
 	if [ ! -d "$(BINARIES_FOLDER)" ]; then $(SUDO) $(MKDIR) "$(BINARIES_FOLDER)"; fi
-	$(SUDO) $(CP) -f "$(CARTHAGE_EXECUTABLE)" "$(BINARIES_FOLDER)"
+	$(SUDO) $(CP) -f "$(UTICA_EXECUTABLE)" "$(BINARIES_FOLDER)"
 
 uninstall:
-	$(RM) "$(BINARIES_FOLDER)/carthage"
+	$(RM) "$(BINARIES_FOLDER)/utica"
 	
 xcodeproj:
 	 swift package generate-xcodeproj
