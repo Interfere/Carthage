@@ -4,8 +4,11 @@ import Tentacle
 
 /// A struct including all constants.
 public struct Constants {
-	/// Carthage's bundle identifier.
+	/// Utica's bundle identifier.
 	public static let bundleIdentifier: String = "org.utica.UticaKit"
+
+  /// Carthage cache folder
+  public static let cacheFolderName: String = "org.carthage.CarthageKit"
 
 	/// The name of the folder into which Carthage puts checked out dependencies (relative
 	/// to the working directory).
@@ -35,7 +38,7 @@ public struct Constants {
 		let urlResult: Result<URL, NSError> = Result(catching: {
 			try fileManager.url(for: .cachesDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
 		}).flatMap { cachesURL in
-			let dependenciesURL = cachesURL.appendingPathComponent(Constants.bundleIdentifier, isDirectory: true)
+			let dependenciesURL = cachesURL.appendingPathComponent(Constants.cacheFolderName, isDirectory: true)
 			let dependenciesPath = dependenciesURL.absoluteString
 
 			if fileManager.fileExists(atPath: dependenciesPath, isDirectory: nil) {
