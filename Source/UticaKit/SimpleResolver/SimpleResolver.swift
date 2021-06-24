@@ -1,7 +1,7 @@
-import Foundation
-import Result
-import ReactiveSwift
 import Commandant
+import Foundation
+import ReactiveSwift
+import Result
 
 /// Responsible for resolving acyclic dependency graphs.
 ///
@@ -28,27 +28,27 @@ import Commandant
 /// if the list of `candidates` is empty, a list of `resolved` dependencies is returned to the caller.
 ///
 public struct SimpleResolver: Resolver {
-	private let versionsForDependency: (Dependency) -> SignalProducer<PinnedVersion, CarthageError>
-	private let resolvedGitReference: (Dependency, String) -> SignalProducer<PinnedVersion, CarthageError>
-	private let dependenciesForDependency: (Dependency, PinnedVersion) -> SignalProducer<(Dependency, VersionSpecifier), CarthageError>
+  private let versionsForDependency: (Dependency) -> SignalProducer<PinnedVersion, CarthageError>
+  private let resolvedGitReference: (Dependency, String) -> SignalProducer<PinnedVersion, CarthageError>
+  private let dependenciesForDependency: (Dependency, PinnedVersion) -> SignalProducer<(Dependency, VersionSpecifier), CarthageError>
 
-	/// Instantiates a dependency graph resolver with the given behaviors.
-	///
-	/// versionsForDependency - Sends a stream of available versions for a
-	///                         dependency.
-	/// dependenciesForDependency - Loads the dependencies for a specific
-	///                             version of a dependency.
-	/// resolvedGitReference - Resolves an arbitrary Git reference to the
-	///                        latest object.
-	public init(
-		versionsForDependency: @escaping (Dependency) -> SignalProducer<PinnedVersion, CarthageError>,
-		dependenciesForDependency: @escaping (Dependency, PinnedVersion) -> SignalProducer<(Dependency, VersionSpecifier), CarthageError>,
-		resolvedGitReference: @escaping (Dependency, String) -> SignalProducer<PinnedVersion, CarthageError>
-	) {
-		self.versionsForDependency = versionsForDependency
-		self.dependenciesForDependency = dependenciesForDependency
-		self.resolvedGitReference = resolvedGitReference
-	}
+  /// Instantiates a dependency graph resolver with the given behaviors.
+  ///
+  /// versionsForDependency - Sends a stream of available versions for a
+  ///                         dependency.
+  /// dependenciesForDependency - Loads the dependencies for a specific
+  ///                             version of a dependency.
+  /// resolvedGitReference - Resolves an arbitrary Git reference to the
+  ///                        latest object.
+  public init(
+    versionsForDependency: @escaping (Dependency) -> SignalProducer<PinnedVersion, CarthageError>,
+    dependenciesForDependency: @escaping (Dependency, PinnedVersion) -> SignalProducer<(Dependency, VersionSpecifier), CarthageError>,
+    resolvedGitReference: @escaping (Dependency, String) -> SignalProducer<PinnedVersion, CarthageError>
+  ) {
+    self.versionsForDependency = versionsForDependency
+    self.dependenciesForDependency = dependenciesForDependency
+    self.resolvedGitReference = resolvedGitReference
+  }
 
   /// Attempts to determine the latest valid version to use for each
   /// dependency in `dependencies`, and all nested dependencies thereof.
@@ -60,11 +60,11 @@ public struct SimpleResolver: Resolver {
   /// - Parameter dependenciesToUpdate: List of dependencies to update
   ///
   /// - Returns: `SignalProducer` that emits either a list of resolved dependencies or `CarthageError`
-	public func resolve(
-		dependencies: [Dependency : VersionSpecifier],
-		lastResolved: [Dependency : PinnedVersion],
-		dependenciesToUpdate: [String]
-	) -> SignalProducer<[Dependency : PinnedVersion], CarthageError> {
+  public func resolve(
+    dependencies: [Dependency: VersionSpecifier],
+    lastResolved: [Dependency: PinnedVersion],
+    dependenciesToUpdate: [String]
+  ) -> SignalProducer<[Dependency: PinnedVersion], CarthageError> {
     guard
       validate(dependencies: dependencies, lastResolved: lastResolved, dependenciesToUpdate: Set(dependenciesToUpdate))
     else {
@@ -77,7 +77,7 @@ public struct SimpleResolver: Resolver {
       )
     )
     .map(\.resolved)
-	}
+  }
 
   /// Validates input parameters.
   ///
@@ -90,8 +90,8 @@ public struct SimpleResolver: Resolver {
   ///
   /// - Returns: `true` if arguments are valid
   private func validate(
-    dependencies: [Dependency : VersionSpecifier],
-    lastResolved: [Dependency : PinnedVersion],
+    dependencies: [Dependency: VersionSpecifier],
+    lastResolved: [Dependency: PinnedVersion],
     dependenciesToUpdate: Set<String>
   ) -> Bool {
     guard !dependenciesToUpdate.isEmpty, !lastResolved.isEmpty else {
@@ -176,8 +176,8 @@ public struct SimpleResolver: Resolver {
   /// - Parameter dependenciesToUpdate: list of dependencies to resolve
   /// - Returns: `requirements` for initial `state`.
   private func buildRequirements(
-    from dependencies: [Dependency : VersionSpecifier],
-    lastResolved: [Dependency : PinnedVersion],
+    from dependencies: [Dependency: VersionSpecifier],
+    lastResolved: [Dependency: PinnedVersion],
     dependenciesToUpdate: Set<String>
   ) -> DependencyRequirements {
     guard !lastResolved.isEmpty, !dependenciesToUpdate.isEmpty else {
@@ -200,7 +200,7 @@ public struct SimpleResolver: Resolver {
   /// - Parameter dependenciesToUpdate: list of dependencies to resolve
   /// - Returns: `filter` for initial `state`
   private func buildFilter(
-    lastResolved: [Dependency : PinnedVersion],
+    lastResolved: [Dependency: PinnedVersion],
     dependenciesToUpdate: Set<String>
   ) -> (DependencyDescriptor, VersionSpecifier) -> Bool {
     guard !lastResolved.isEmpty, !dependenciesToUpdate.isEmpty else {
@@ -213,7 +213,8 @@ public struct SimpleResolver: Resolver {
       }
 
       if let lastResolvedVersion = lastResolved[descriptor.dependency],
-         specifier.isSatisfied(by: lastResolvedVersion) {
+         specifier.isSatisfied(by: lastResolvedVersion)
+      {
         return descriptor.version == lastResolvedVersion
       } else {
         return specifier.isSatisfied(by: descriptor.version)

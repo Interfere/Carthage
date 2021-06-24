@@ -11,26 +11,26 @@ import Result
 /// - parameter platformName: If given, only sends bundles from an XCFramework with a matching `SupportedPlatform`.
 /// - parameter variant: If given along with `platformName`, only sends bundles from an XCFramework with a matching `SupportedPlatformVariant`.
 public func frameworkBundlesInURL(_ url: URL, compatibleWith platformName: String? = nil, variant: String? = nil) -> SignalProducer<Bundle, DecodingError> {
-	guard let bundle = Bundle(url: url) else {
-		return .empty
-	}
+  guard let bundle = Bundle(url: url) else {
+    return .empty
+  }
 
-	switch bundle.object(forInfoDictionaryKey: "CFBundlePackageType") as? String {
-	case "XFWK":
-		let decoder = PropertyListDecoder()
-		let infoData = bundle.infoDictionary.flatMap({ try? PropertyListSerialization.data(fromPropertyList: $0, format: .binary, options: 0) }) ?? Data()
-		let xcframework = Result<XCFramework, DecodingError>(catching: { try decoder.decode(XCFramework.self, from: infoData) })
-		return SignalProducer(result: xcframework)
-			.map({ $0.availableLibraries }).flatten()
-			.filter { library in
-				guard let platformName = platformName else { return true }
-				return library.supportedPlatform == platformName && library.supportedPlatformVariant == variant
-			}
-			.map({ Bundle(url: url.appendingPathComponent($0.identifier).appendingPathComponent($0.path)) })
-			.skipNil()
-	default: // Typically "FMWK" but not required
-		return SignalProducer(value: bundle)
-	}
+  switch bundle.object(forInfoDictionaryKey: "CFBundlePackageType") as? String {
+    case "XFWK":
+      let decoder = PropertyListDecoder()
+      let infoData = bundle.infoDictionary.flatMap { try? PropertyListSerialization.data(fromPropertyList: $0, format: .binary, options: 0) } ?? Data()
+      let xcframework = Result<XCFramework, DecodingError>(catching: { try decoder.decode(XCFramework.self, from: infoData) })
+      return SignalProducer(result: xcframework)
+        .map { $0.availableLibraries }.flatten()
+        .filter { library in
+          guard let platformName = platformName else { return true }
+          return library.supportedPlatform == platformName && library.supportedPlatformVariant == variant
+        }
+        .map { Bundle(url: url.appendingPathComponent($0.identifier).appendingPathComponent($0.path)) }
+        .skipNil()
+    default: // Typically "FMWK" but not required
+      return SignalProducer(value: bundle)
+  }
 }
 
 /// Create or update an xcframework from a framework bundle and its debug information. Any existing framework with the
@@ -48,15 +48,15 @@ public func frameworkBundlesInURL(_ url: URL, compatibleWith platformName: Strin
 /// - parameter variant: The environment portion of the platform triple (i.e. "simulator" or nil). Libraries in the xcframework with a matching platform name and variant will be replaced.
 /// - parameter outputURL: Location to write the merged xcframework to.
 public func mergeIntoXCFramework(
-	_ xcframeworkURL: URL,
-	framework: URL,
-	debugSymbols: [URL],
-	platformName: String,
-	variant: String?,
-	outputURL: URL
+  _ xcframeworkURL: URL,
+  framework: URL,
+  debugSymbols: [URL],
+  platformName: String,
+  variant: String?,
+  outputURL: URL
 ) -> SignalProducer<URL, TaskError> {
-	let baseArguments = ["xcodebuild", "-create-xcframework", "-allow-internal-distribution", "-output", outputURL.path]
-	let newLibraryArguments = ["-framework", framework.path] + debugSymbols.flatMap { ["-debug-symbols", $0.path] }
+  let baseArguments = ["xcodebuild", "-create-xcframework", "-allow-internal-distribution", "-output", outputURL.path]
+  let newLibraryArguments = ["-framework", framework.path] + debugSymbols.flatMap { ["-debug-symbols", $0.path] }
 
   let buildExistingLibraryArguments: SignalProducer<[String], Never> = SignalProducer {
     Result(catching: { try loadXCFramework(url: xcframeworkURL) })
@@ -71,12 +71,11 @@ public func mergeIntoXCFramework(
   }
   .flatMapError { _ in SignalProducer(value: []) }
 
-	return buildExistingLibraryArguments.promoteError().flatMap(.concat) { existingLibraryArguments in
-		let arguments = baseArguments + newLibraryArguments + existingLibraryArguments
-		return Task("/usr/bin/xcrun", arguments: arguments).launch().ignoreTaskData().map { _ in outputURL }
-	}
+  return buildExistingLibraryArguments.promoteError().flatMap(.concat) { existingLibraryArguments in
+    let arguments = baseArguments + newLibraryArguments + existingLibraryArguments
+    return Task("/usr/bin/xcrun", arguments: arguments).launch().ignoreTaskData().map { _ in outputURL }
+  }
 }
-
 
 /// Attempts to load XCFramework at url
 ///
@@ -95,8 +94,8 @@ private func buildArguments(from library: XCFramework.Library, baseUrl: URL) thr
 
   if let debugSymbolsPath = library.debugSymbolsPath {
     let dsyms = try FileManager.default.contentsOfDirectory(
-     at: libraryURL.appendingPathComponent(debugSymbolsPath),
-     includingPropertiesForKeys: nil
+      at: libraryURL.appendingPathComponent(debugSymbolsPath),
+      includingPropertiesForKeys: nil
     )
     arguments += dsyms.flatMap { ["-debug-symbols", $0.path] }
   }
@@ -112,29 +111,29 @@ private func buildArguments(from library: XCFramework.Library, baseUrl: URL) thr
 }
 
 struct XCFramework: Decodable {
-	let availableLibraries: [Library]
-	let version: String
+  let availableLibraries: [Library]
+  let version: String
 
-	struct Library: Decodable {
-		let identifier: String
-		let path: String
-		let supportedPlatform: String
-		let supportedPlatformVariant: String?
-		let debugSymbolsPath: String?
-		let bitcodeSymbolMapsPath: String?
+  struct Library: Decodable {
+    let identifier: String
+    let path: String
+    let supportedPlatform: String
+    let supportedPlatformVariant: String?
+    let debugSymbolsPath: String?
+    let bitcodeSymbolMapsPath: String?
 
-		enum CodingKeys: String, CodingKey {
-			case identifier = "LibraryIdentifier"
-			case path = "LibraryPath"
-			case supportedPlatform = "SupportedPlatform"
-			case supportedPlatformVariant = "SupportedPlatformVariant"
-			case debugSymbolsPath = "DebugSymbolsPath"
-			case bitcodeSymbolMapsPath = "BitcodeSymbolMapsPath"
-		}
-	}
+    enum CodingKeys: String, CodingKey {
+      case identifier = "LibraryIdentifier"
+      case path = "LibraryPath"
+      case supportedPlatform = "SupportedPlatform"
+      case supportedPlatformVariant = "SupportedPlatformVariant"
+      case debugSymbolsPath = "DebugSymbolsPath"
+      case bitcodeSymbolMapsPath = "BitcodeSymbolMapsPath"
+    }
+  }
 
-	enum CodingKeys: String, CodingKey {
-		case availableLibraries = "AvailableLibraries"
-		case version = "XCFrameworkFormatVersion"
-	}
+  enum CodingKeys: String, CodingKey {
+    case availableLibraries = "AvailableLibraries"
+    case version = "XCFrameworkFormatVersion"
+  }
 }
