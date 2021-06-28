@@ -13,7 +13,7 @@ teardown() {
 github "AFNetworking/AFNetworking" == 2.6.3
 github "mdiep/MMMarkdown" == 0.5.5
 EOF
-    run utica bootstrap --platform ios
+    run utica bootstrap --platform ios --valid-simulator-archs "i386 x86_64"
     [ "$status" -eq 0 ]
     [ -e Carthage/Build/iOS/MMMarkdown.framework ]
 }

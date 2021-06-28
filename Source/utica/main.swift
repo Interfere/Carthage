@@ -1,23 +1,23 @@
-import UticaKit
 import Commandant
 import Foundation
 import ReactiveSwift
 import ReactiveTask
 import Result
+import UticaKit
 
 setlinebuf(stdout)
 
 guard ensureGitVersion().first()?.value == true else {
-	fputs("Carthage requires git \(carthageRequiredGitVersion) or later.\n", stderr)
-	exit(EXIT_FAILURE)
+  fputs("Carthage requires git \(carthageRequiredGitVersion) or later.\n", stderr)
+  exit(EXIT_FAILURE)
 }
 
 if let remoteVersion = remoteVersion(), CarthageKitVersion.current.value < remoteVersion {
-	fputs("Please update to the latest Carthage version: \(remoteVersion). You currently are on \(CarthageKitVersion.current.value)" + "\n", stderr)
+  fputs("Please update to the latest Carthage version: \(remoteVersion). You currently are on \(CarthageKitVersion.current.value)" + "\n", stderr)
 }
 
 if let carthagePath = Bundle.main.executablePath {
-	setenv("CARTHAGE_PATH", carthagePath, 0)
+  setenv("CARTHAGE_PATH", carthagePath, 0)
 }
 
 let registry = CommandRegistry<CarthageError>()
@@ -36,5 +36,5 @@ let helpCommand = HelpCommand(registry: registry)
 registry.register(helpCommand)
 
 registry.main(defaultVerb: helpCommand.verb) { error in
-	fputs(error.description + "\n", stderr)
+  fputs(error.description + "\n", stderr)
 }

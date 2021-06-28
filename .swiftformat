@@ -1,0 +1,23 @@
+# format options
+
+--indent 2
+--commas inline
+--header ignore
+--exponentcase lowercase
+--binarygrouping none 
+--decimalgrouping none 
+--hexgrouping none 
+--indentcase true 
+--octalgrouping none 
+--self init-only 
+--semicolons never 
+--wraparguments before-first 
+--wrapparameters before-first
+--wrapcollections before-first
+--swiftversion 5
+--trimwhitespace always
+--xcodeindentation enabled
+--nospaceoperators ...,..>,..<
+
+# rules
+--enable andOperator

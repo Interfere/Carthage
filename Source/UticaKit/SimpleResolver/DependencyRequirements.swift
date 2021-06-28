@@ -12,11 +12,11 @@ internal struct DependencyRequirement {
 internal struct DependencyRequirements {
   private var storage: [Dependency: DependencyRequirement]
 
-  fileprivate init(storage: [Dependency: DependencyRequirement]) {
+  private init(storage: [Dependency: DependencyRequirement]) {
     self.storage = storage
   }
 
-  init(dependencies: [Dependency : VersionSpecifier]) {
+  init(dependencies: [Dependency: VersionSpecifier]) {
     self.storage = dependencies.mapValues { DependencyRequirement(specifier: $0, constraintor: nil) }
   }
 

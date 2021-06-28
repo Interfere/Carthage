@@ -20,6 +20,8 @@ jobs:
           key: ${{ runner.os }}-spm-${{ hashFiles('**/Package.resolved') }}
       - name: Install bats
         run: HOMEBREW_NO_AUTO_UPDATE=1 brew install bats
+      - name: Uninstall utica
+        run: make uninstall
       - name: Build and Install utica
         run: make install
       - name: Run Integration tests
