@@ -9,13 +9,13 @@ import Result
 /// routine.
 internal struct SimpleResolverState {
   /// Set of candidates to be resolved at next iteration of resolution algorithm
-  internal let candidates: Set<DependencyDescriptor>
+  internal let candidates: Set<ResolvedDependency>
   /// Map of requirements, gathered up to the current resolution iteration
   internal let requirements: DependencyRequirements
   /// List of resolved dependencies
   internal let resolved: [Dependency: PinnedVersion]
   /// Filter routine used for algorithm tuning and adjustment
-  internal let filter: (DependencyDescriptor, VersionSpecifier) -> Bool
+  internal let filter: (ResolvedDependency, VersionSpecifier) -> Bool
 }
 
 extension SimpleResolverState {
@@ -63,7 +63,7 @@ extension SimpleResolverState {
   func updateResolved() -> SignalProducer<SimpleResolverState, CarthageError> {
     SignalProducer(value: self)
       .map { state in
-        let allDependencies = state.resolved.map { DependencyDescriptor(dependency: $0, version: $1) } + candidates
+        let allDependencies = state.resolved.map { ResolvedDependency(dependency: $0, version: $1) } + candidates
         let resolved = allDependencies
           .filter { state.requirements.versionSpecifier(for: $0.dependency).isSatisfied(by: $0.version) }
           .reduce(into: [:]) { result, descriptor in result[descriptor.dependency] = descriptor.version }
@@ -142,7 +142,7 @@ private enum Helper {
   /// - Returns: `SignalProducer` that emits either a map `[Candidate -> [Dependency]]`
   ///            or `CarthageError`
   static func collectDependencies(
-    for candidates: Set<DependencyDescriptor>,
+    for candidates: Set<ResolvedDependency>,
     dependenciesForDependency: @escaping (Dependency, PinnedVersion) -> SignalProducer<(Dependency, VersionSpecifier), CarthageError>,
     resolvedGitReference: @escaping (Dependency, String) -> SignalProducer<PinnedVersion, CarthageError>
   ) -> SignalProducer<[Dependency: [(Dependency, VersionSpecifier)]], CarthageError> {
@@ -183,10 +183,10 @@ private enum Helper {
     requirements: DependencyRequirements,
     versionsForDependency: @escaping (Dependency) -> SignalProducer<PinnedVersion, CarthageError>,
     resolvedGitReference: @escaping (Dependency, String) -> SignalProducer<PinnedVersion, CarthageError>,
-    filter: @escaping (DependencyDescriptor) -> Bool
-  ) -> SignalProducer<Set<DependencyDescriptor>, CarthageError> {
+    filter: @escaping (ResolvedDependency) -> Bool
+  ) -> SignalProducer<Set<ResolvedDependency>, CarthageError> {
     SignalProducer(dependencies)
-      .flatMap(.merge) { dependency -> SignalProducer<DependencyDescriptor?, CarthageError> in
+      .flatMap(.merge) { dependency -> SignalProducer<ResolvedDependency?, CarthageError> in
         collectAvailableVersions(
           for: dependency,
           requirements: requirements,
@@ -249,10 +249,10 @@ private enum Helper {
   private static func selectCandidate(
     for dependency: Dependency,
     availableVersions: [PinnedVersion],
-    filter: @escaping (DependencyDescriptor) -> Bool
-  ) -> SignalProducer<DependencyDescriptor?, Never> {
+    filter: @escaping (ResolvedDependency) -> Bool
+  ) -> SignalProducer<ResolvedDependency?, Never> {
     SignalProducer(availableVersions)
-      .map { DependencyDescriptor(dependency: dependency, version: $0) }
+      .map { ResolvedDependency(dependency: dependency, version: $0) }
       .filter(filter)
       .collect()
       .map { $0.sorted().first }

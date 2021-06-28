@@ -32,7 +32,7 @@ internal struct DependencyRequirements {
     return versionSpecifier(for: dependency).isSatisfied(by: version)
   }
 
-  func isSatisfied(by dependency: DependencyDescriptor) -> Bool {
+  func isSatisfied(by dependency: ResolvedDependency) -> Bool {
     isSatisfied(by: dependency.version, for: dependency.dependency)
   }
 

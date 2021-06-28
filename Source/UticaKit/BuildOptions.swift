@@ -18,8 +18,10 @@ public struct BuildOptions {
   public var useBinaries: Bool
   /// Whether to create an XCFramework instead of lipoing built products.
   public var useXCFrameworks: Bool
-  /// Explicitly metntion architectures for simulator
+  /// Explicitly mention architectures for simulator
   public var validSimulatorArchs: String?
+  /// Explicitly define number of `xcodebuild` tasks
+  public var concurrentJobsCount: Int
 
   public init(
     configuration: String,
@@ -29,7 +31,8 @@ public struct BuildOptions {
     cacheBuilds: Bool = true,
     useBinaries: Bool = true,
     useXCFrameworks: Bool = false,
-    validSimulatorArchs: String? = nil
+    validSimulatorArchs: String? = nil,
+    concurrentJobsCount: Int = 0
   ) {
     self.configuration = configuration
     self.platforms = platforms
@@ -39,5 +42,6 @@ public struct BuildOptions {
     self.useBinaries = useBinaries
     self.useXCFrameworks = useXCFrameworks
     self.validSimulatorArchs = validSimulatorArchs
+    self.concurrentJobsCount = concurrentJobsCount
   }
 }

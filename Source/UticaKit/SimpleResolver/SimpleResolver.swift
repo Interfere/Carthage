@@ -155,7 +155,7 @@ public struct SimpleResolver: Resolver {
   /// - Returns: initial `state`
   private func initialState(
     from requirements: DependencyRequirements,
-    filter: @escaping (DependencyDescriptor, VersionSpecifier) -> Bool
+    filter: @escaping (ResolvedDependency, VersionSpecifier) -> Bool
   ) -> SimpleResolverState {
     return SimpleResolverState(
       candidates: [],
@@ -202,7 +202,7 @@ public struct SimpleResolver: Resolver {
   private func buildFilter(
     lastResolved: [Dependency: PinnedVersion],
     dependenciesToUpdate: Set<String>
-  ) -> (DependencyDescriptor, VersionSpecifier) -> Bool {
+  ) -> (ResolvedDependency, VersionSpecifier) -> Bool {
     guard !lastResolved.isEmpty, !dependenciesToUpdate.isEmpty else {
       return defaultFiler
     }
@@ -224,4 +224,4 @@ public struct SimpleResolver: Resolver {
 }
 
 /// Default `filter` routine which simply check if dependency satisfies `specifier`
-private let defaultFiler: (DependencyDescriptor, VersionSpecifier) -> Bool = { $1.isSatisfied(by: $0.version) }
+private let defaultFiler: (ResolvedDependency, VersionSpecifier) -> Bool = { $1.isSatisfied(by: $0.version) }
