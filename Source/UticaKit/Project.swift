@@ -453,7 +453,7 @@ public final class Project { // swiftlint:disable:this type_body_length
 	///
 	/// This will fetch dependency repositories as necessary, but will not check
 	/// them out into the project's working directory.
-	public func updatedResolvedCartfile(_ dependenciesToUpdate: [String]? = nil, resolver: ResolverProtocol) -> SignalProducer<ResolvedCartfile, CarthageError> {
+	public func updatedResolvedCartfile(_ dependenciesToUpdate: [String]? = nil, resolver: Resolver) -> SignalProducer<ResolvedCartfile, CarthageError> {
 		let resolvedCartfile: SignalProducer<ResolvedCartfile?, CarthageError> = loadResolvedCartfile()
 			.map(Optional.init)
 			.flatMapError { _ in .init(value: nil) }
@@ -463,8 +463,8 @@ public final class Project { // swiftlint:disable:this type_body_length
 			.flatMap(.merge) { cartfile, resolvedCartfile in
 				return resolver.resolve(
 					dependencies: cartfile.dependencies,
-					lastResolved: resolvedCartfile?.dependencies,
-					dependenciesToUpdate: dependenciesToUpdate
+          lastResolved: resolvedCartfile?.dependencies ?? [:],
+					dependenciesToUpdate: dependenciesToUpdate ?? []
 				)
 			}
 			.map(ResolvedCartfile.init)
@@ -475,7 +475,7 @@ public final class Project { // swiftlint:disable:this type_body_length
 	///
 	/// This will fetch dependency repositories as necessary, but will not check
 	/// them out into the project's working directory.
-	private func latestDependencies(resolver: ResolverProtocol) -> SignalProducer<[Dependency: PinnedVersion], CarthageError> {
+	private func latestDependencies(resolver: Resolver) -> SignalProducer<[Dependency: PinnedVersion], CarthageError> {
 		func resolve(prefersGitReference: Bool) -> SignalProducer<[Dependency: PinnedVersion], CarthageError> {
 			return SignalProducer
 				.combineLatest(loadCombinedCartfile(), loadResolvedCartfile())
@@ -493,7 +493,7 @@ public final class Project { // swiftlint:disable:this type_body_length
 							result[dependency] = specifier
 						}
 				}
-				.flatMap(.merge) { resolver.resolve(dependencies: $0, lastResolved: nil, dependenciesToUpdate: nil) }
+        .flatMap(.merge) { resolver.resolve(dependencies: $0, lastResolved: [:], dependenciesToUpdate: []) }
 		}
 
 		return resolve(prefersGitReference: false).flatMapError { error in
@@ -512,14 +512,7 @@ public final class Project { // swiftlint:disable:this type_body_length
 	///
 	/// This will fetch dependency repositories as necessary, but will not check
 	/// them out into the project's working directory.
-	public func outdatedDependencies(_ includeNestedDependencies: Bool, useNewResolver: Bool = true, resolver: ResolverProtocol? = nil) -> SignalProducer<[OutdatedDependency], CarthageError> {
-		let resolverType: ResolverProtocol.Type
-		if useNewResolver {
-			resolverType = NewResolver.self
-		} else {
-			resolverType = Resolver.self
-		}
-
+  public func outdatedDependencies(_ includeNestedDependencies: Bool, resolver: Resolver? = nil) -> SignalProducer<[OutdatedDependency], CarthageError> {
 		let dependencies: (Dependency, PinnedVersion) -> SignalProducer<(Dependency, VersionSpecifier), CarthageError>
 		if includeNestedDependencies {
 			dependencies = self.dependencies(for:version:)
@@ -527,11 +520,11 @@ public final class Project { // swiftlint:disable:this type_body_length
 			dependencies = { _, _ in .empty }
 		}
 
-		let resolver = resolver ?? resolverType.init(
-			versionsForDependency: versions(for:),
-			dependenciesForDependency: dependencies,
-			resolvedGitReference: resolvedGitReference
-		)
+		let resolver = resolver ?? SimpleResolver(
+      versionsForDependency: versions(for:),
+      dependenciesForDependency: dependencies,
+      resolvedGitReference: resolvedGitReference
+    )
 
 		let outdatedDependencies = SignalProducer
 			.combineLatest(
@@ -577,21 +570,14 @@ public final class Project { // swiftlint:disable:this type_body_length
 	/// directory checkouts if the given parameter is true.
 	public func updateDependencies(
 		shouldCheckout: Bool = true,
-		useNewResolver: Bool = false,
 		buildOptions: BuildOptions,
 		dependenciesToUpdate: [String]? = nil
 	) -> SignalProducer<(), CarthageError> {
-		let resolverType: ResolverProtocol.Type
-		if useNewResolver {
-			resolverType = NewResolver.self
-		} else {
-			resolverType = Resolver.self
-		}
-		let resolver = resolverType.init(
-			versionsForDependency: versions(for:),
-			dependenciesForDependency: dependencies(for:version:),
-			resolvedGitReference: resolvedGitReference
-		)
+		let resolver = SimpleResolver(
+      versionsForDependency: versions(for:),
+      dependenciesForDependency: dependencies,
+      resolvedGitReference: resolvedGitReference
+    )
 
 		return updatedResolvedCartfile(dependenciesToUpdate, resolver: resolver)
 			.attemptMap { resolvedCartfile -> Result<(), CarthageError> in
@@ -963,7 +949,7 @@ public final class Project { // swiftlint:disable:this type_body_length
 
 				let sortedPinnedDependencies = cartfile.dependencies.keys
 					.filter { dependency in sortedDependencies.contains(dependency) }
-					.sorted { left, right in sortedDependencies.index(of: left)! < sortedDependencies.index(of: right)! }
+          .sorted { left, right in sortedDependencies.firstIndex(of: left)! < sortedDependencies.firstIndex(of: right)! }
 					.map { ($0, cartfile.dependencies[$0]!) }
 
 				return SignalProducer(sortedPinnedDependencies)
@@ -1194,7 +1180,7 @@ public final class Project { // swiftlint:disable:this type_body_length
 								return .empty
 							}
 							return self.installBinaries(for: dependency, pinnedVersion: version, preferXCFrameworks: options.useXCFrameworks, toolchain: options.toolchain)
-								.filterMap { installed -> (Dependency, PinnedVersion)? in
+                .compactMap { installed -> (Dependency, PinnedVersion)? in
 									return installed ? (dependency, version) : nil
 								}
 						case let .binary(binary):

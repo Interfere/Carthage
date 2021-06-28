@@ -12,7 +12,6 @@ public struct UpdateCommand: CommandProtocol {
 		public let buildAfterUpdate: Bool
 		public let isVerbose: Bool
 		public let logPath: String?
-		public let useNewResolver: Bool
 		public let useNetrc: Bool
 		public let buildOptions: UticaKit.BuildOptions
 		public let checkoutOptions: CheckoutCommand.Options
@@ -49,7 +48,6 @@ public struct UpdateCommand: CommandProtocol {
 					 buildAfterUpdate: Bool,
 					 isVerbose: Bool,
 					 logPath: String?,
-					 useNewResolver: Bool,
 					 useNetrc: Bool,
 					 buildOptions: BuildOptions,
 					 checkoutOptions: CheckoutCommand.Options
@@ -58,7 +56,6 @@ public struct UpdateCommand: CommandProtocol {
 			self.buildAfterUpdate = buildAfterUpdate
 			self.isVerbose = isVerbose
 			self.logPath = logPath
-			self.useNewResolver = useNewResolver
 			self.useNetrc = useNetrc
 			self.buildOptions = buildOptions
 			self.checkoutOptions = checkoutOptions
@@ -79,11 +76,10 @@ public struct UpdateCommand: CommandProtocol {
 			let defaultLogPath: String? = nil
 			
 			return curry(Options.init)
-				<*> mode <| Option(key: "checkout", defaultValue: true, usage: "skip the checking out of dependencies after updating")
-				<*> mode <| Option(key: "build", defaultValue: true, usage: buildDescription)
-				<*> mode <| Option(key: "verbose", defaultValue: false, usage: "print xcodebuild output inline (ignored if --no-build option is present)")
-				<*> mode <| Option(key: "log-path", defaultValue: defaultLogPath, usage: "path to the xcode build output. A temporary file is used by default")
-				<*> mode <| Option(key: "new-resolver", defaultValue: false, usage: "use the new resolver codeline when calculating dependencies. Default is false")
+				<*> mode <| Option<Bool>(key: "checkout", defaultValue: true, usage: "skip the checking out of dependencies after updating")
+				<*> mode <| Option<Bool>(key: "build", defaultValue: true, usage: buildDescription)
+				<*> mode <| Option<Bool>(key: "verbose", defaultValue: false, usage: "print xcodebuild output inline (ignored if --no-build option is present)")
+				<*> mode <| Option<String?>(key: "log-path", defaultValue: defaultLogPath, usage: "path to the xcode build output. A temporary file is used by default")
 				<*> mode <| netrcOption
 				<*> BuildOptions.evaluate(mode, addendum: "\n(ignored if --no-build option is present)")
 				<*> CheckoutCommand.Options.evaluate(mode, dependenciesUsage: dependenciesUsage)
@@ -123,7 +119,8 @@ public struct UpdateCommand: CommandProtocol {
 				}
 				
 				let updateDependencies = project.updateDependencies(
-					shouldCheckout: options.checkoutAfterUpdate, useNewResolver: options.useNewResolver, buildOptions: options.buildOptions,
+					shouldCheckout: options.checkoutAfterUpdate,
+					buildOptions: options.buildOptions,
 					dependenciesToUpdate: options.dependenciesToUpdate
 				)
 				

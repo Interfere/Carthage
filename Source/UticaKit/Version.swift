@@ -52,9 +52,9 @@ public struct SemanticVersion: Hashable {
 		self.buildMetadata = buildMetadata
 	}
 
-	public var hashValue: Int {
-		return components.reduce(0) { $0 ^ $1.hashValue }
-	}
+  public func hash(into hasher: inout Hasher) {
+    hasher.combine(components)
+  }
 }
 
 extension SemanticVersion {
@@ -477,6 +477,27 @@ extension VersionSpecifier: Scannable {
 			return .success(.any)
 		}
 	}
+}
+
+extension VersionSpecifier {
+  /// Defines an order of strictness.
+  public func isStricter(than specifier: VersionSpecifier) -> Bool {
+    switch (self, specifier) {
+      case (.exactly, .exactly), (.gitReference, .gitReference),
+           (.exactly, .gitReference), (.gitReference, .exactly):
+        return false
+
+      case let (.atLeast(lv), .atLeast(rv)), let (.compatibleWith(lv), .compatibleWith(rv)),
+           let (.compatibleWith(lv), .atLeast(rv)), let (.atLeast(lv), .compatibleWith(rv)):
+        return lv.discardingBuildMetadata > rv.discardingBuildMetadata
+
+      case (.exactly, _), (.gitReference, _), (_, .any):
+        return true
+
+      case (.any, _), (_, .exactly), (_, .gitReference):
+        return false
+    }
+  }
 }
 
 extension VersionSpecifier: CustomStringConvertible {

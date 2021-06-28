@@ -66,7 +66,7 @@ internal struct DB {
 		}
 	}
 
-	func resolver(_ resolverType: ResolverProtocol.Type = Resolver.self) -> ResolverProtocol {
+  func resolver(_ resolverType: Resolver.Type = SimpleResolver.self) -> Resolver {
 		return resolverType.init(
 			versionsForDependency: self.versions(for:),
 			dependenciesForDependency: self.dependencies(for:version:),
@@ -75,7 +75,7 @@ internal struct DB {
 	}
 
 	func resolve(
-		_ resolverType: ResolverProtocol.Type,
+		_ resolverType: Resolver.Type,
 		_ dependencies: [Dependency: VersionSpecifier],
 		resolved: [Dependency: PinnedVersion] = [:],
 		updating: Set<Dependency> = []
