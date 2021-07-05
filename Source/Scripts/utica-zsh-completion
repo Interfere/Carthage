@@ -1,6 +1,6 @@
 #compdef carthage
 #
-# Zsh completion script for Carthage.
+# Zsh completion script for Utica.
 
 __subcommands() {
     local -a commands
@@ -20,13 +20,13 @@ __subcommands() {
     _values Commands $commands
 }
 
-__carthage_dependencies() {
+__utica_dependencies() {
    local -a _dependencies
    _dependencies=( $(egrep '^\s*git' Cartfile | awk -F '"' '{print $2}' | sed -e 's/.*\///' | sed -e 's/\.git$//') )
    _describe -t dependencies Dependencies _dependencies
 }
 
-_carthage() {
+_utica() {
     typeset -A opt_args
     local ret=1 state
 
@@ -61,6 +61,8 @@ _carthage() {
                         '--color: :(auto always never)' \
                         '--project-directory: :_directories' \
                         '--cache-builds' \
+                        '--valid-simulator-archs :(i386 x86_64 arm64)' \
+                        '--jobs' \
                         '*: :__carthage_dependencies' \
                         && ret=0
                         ;;
@@ -75,6 +77,8 @@ _carthage() {
                         '--verbose' \
                         '--project-directory: :_directories' \
                         '--cache-builds' \
+                        '--valid-simulator-archs :(i386 x86_64 arm64)' \
+                        '--jobs' \
                         '(-)*:: :->null_state' \
                         && ret=0
                         ;;
