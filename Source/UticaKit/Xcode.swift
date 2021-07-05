@@ -1434,6 +1434,10 @@ public func nonDestructivelyStripArchitectures(_ frameworkURL: URL, _ architectu
         }
 
       return task.then(result)
+        .attempt { _ in
+          try? FileManager.default.removeItem(at: tempDir)
+          return .success(())
+        }
     }
 }
 
