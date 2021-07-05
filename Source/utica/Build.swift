@@ -26,6 +26,7 @@ extension BuildOptions: OptionsProtocol {
       <*> mode <| Option(key: "use-binaries", defaultValue: true, usage: "don't use downloaded binaries when possible")
       <*> mode <| Option(key: "use-xcframeworks", defaultValue: false, usage: "create xcframework bundles instead of one framework per platform (requires Xcode 12+)")
       <*> mode <| Option<String?>(key: "valid-simulator-archs", defaultValue: nil, usage: "explicitly list architectures valid for simulator")
+      <*> mode <| Option<Int>(key: "jobs", defaultValue: 0, usage: "max number of concurrent xcodebuild tasks. Default: number of cores")
   }
 }
 

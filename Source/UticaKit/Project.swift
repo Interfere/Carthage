@@ -921,10 +921,10 @@ public final class Project { // swiftlint:disable:this type_body_length
       })
   }
 
-  public func buildOrderForResolvedCartfile(
+  private func buildOrderForResolvedCartfile(
     _ cartfile: ResolvedCartfile,
     dependenciesToInclude: [String]? = nil
-  ) -> SignalProducer<(Dependency, PinnedVersion), CarthageError> {
+  ) -> SignalProducer<BuildGraphNode, CarthageError> {
     // swiftlint:disable:next nesting
     typealias DependencyGraph = [Dependency: Set<Dependency>]
 
@@ -932,11 +932,11 @@ public final class Project { // swiftlint:disable:this type_body_length
     // out the relationships between them. Loading the cartfile will each will give us its
     // dependencies. Building a recursive lookup table with this information will let us sort
     // dependencies before the projects that depend on them.
-    return SignalProducer<(Dependency, PinnedVersion), CarthageError>(cartfile.dependencies.map { ($0, $1) })
-      .flatMap(.merge) { (dependency: Dependency, version: PinnedVersion) -> SignalProducer<DependencyGraph, CarthageError> in
-        self.dependencySet(for: dependency, version: version)
+    return SignalProducer<ResolvedDependency, CarthageError>(cartfile.dependencies.map(ResolvedDependency.init))
+      .flatMap(.merge) { resolvedDependency -> SignalProducer<DependencyGraph, CarthageError> in
+        self.dependencySet(for: resolvedDependency.dependency, version: resolvedDependency.version)
           .map { dependencies in
-            [dependency: dependencies]
+            [resolvedDependency.dependency: dependencies]
           }
       }
       .reduce(into: [:]) { (working: inout DependencyGraph, next: DependencyGraph) in
@@ -944,9 +944,8 @@ public final class Project { // swiftlint:disable:this type_body_length
           working.updateValue(value, forKey: key)
         }
       }
-      .flatMap(.latest) { (graph: DependencyGraph) -> SignalProducer<(Dependency, PinnedVersion), CarthageError> in
-        let dependenciesToInclude = Set(graph
-          .map { dependency, _ in dependency }
+      .flatMap(.latest) { (graph: DependencyGraph) -> SignalProducer<BuildGraphNode, CarthageError> in
+        let dependenciesToInclude = Set(graph.keys
           .filter { dependency in dependenciesToInclude?.contains(dependency.name) ?? false })
 
         guard let sortedDependencies = topologicalSort(graph, nodes: dependenciesToInclude) else { // swiftlint:disable:this single_line_guard
@@ -956,7 +955,8 @@ public final class Project { // swiftlint:disable:this type_body_length
         let sortedPinnedDependencies = cartfile.dependencies.keys
           .filter { dependency in sortedDependencies.contains(dependency) }
           .sorted { left, right in sortedDependencies.firstIndex(of: left)! < sortedDependencies.firstIndex(of: right)! }
-          .map { ($0, cartfile.dependencies[$0]!) }
+          .map { ResolvedDependency(dependency:$0, version: cartfile.dependencies[$0]!) }
+          .map { BuildGraphNode(resolvedDependency: $0, dependencies: graph[$0.dependency, default: Set()]) }
 
         return SignalProducer(sortedPinnedDependencies)
       }
@@ -1130,127 +1130,247 @@ public final class Project { // swiftlint:disable:this type_body_length
       }
   }
 
+  struct ConcurrentBuildState {
+    typealias Observer = (Signal<ResolvedDependency, CarthageError>.Observer, Lifetime)
+    var observer: Observer? {
+      didSet {
+        if observer != nil {
+          sendNextChunk()
+        }
+      }
+    }
+    private var builtDependencies: Set<Dependency>
+    private var dependencies: [BuildGraphNode]
+
+    init(dependencies: [BuildGraphNode], builtDependencies: Set<Dependency>) {
+      self.dependencies = dependencies
+      self.builtDependencies = builtDependencies
+      self.observer = nil
+    }
+
+    mutating func markAsBuilt(dependency: Dependency) {
+      builtDependencies.insert(dependency)
+      sendNextChunk()
+    }
+
+    private mutating func sendNextChunk() {
+      guard let (observer, lifetime) = observer else {
+        return
+      }
+
+      guard !lifetime.hasEnded else {
+        self.observer = nil
+        return
+      }
+
+      let pivot = dependencies.partition { $0.dependencies.isSubset(of: builtDependencies) }
+      dependencies[pivot...]
+        .forEach {
+          if !lifetime.hasEnded {
+            observer.send(value: $0.resolvedDependency)
+          }
+        }
+      dependencies.removeSubrange(pivot...)
+      if dependencies.isEmpty {
+        if !lifetime.hasEnded {
+          observer.sendCompleted()
+        }
+        self.observer = nil
+      }
+    }
+  }
+
+  private func concurrentBuildDependencies(
+    _ dependenciesToBuild: [BuildGraphNode],
+    prebuiltDependencies: Set<Dependency>,
+    options: BuildOptions,
+    sdkFilter: @escaping SDKFilterCallback = { sdks, _, _, _ in .success(sdks) }
+  ) -> BuildSchemeProducer {
+    let numberOfJobs = options.concurrentJobsCount > 0 ? UInt(options.concurrentJobsCount) : UInt(ProcessInfo.processInfo.processorCount)
+    let state = Atomic(
+      ConcurrentBuildState(dependencies: dependenciesToBuild, builtDependencies: prebuiltDependencies)
+    )
+    return SignalProducer<ResolvedDependency, CarthageError> { observer, lifetime in
+      state.modify { $0.observer = (observer, lifetime) }
+    }
+    .observe(on: QueueScheduler(qos: .default, name: "org.utica.UticaKit.Project.concurrentBuildDependencies"))
+    .flatMap(.concurrent(limit: numberOfJobs)) { resolvedDependency -> BuildSchemeProducer in
+      self.symlinkAndBuild(
+        dependency: resolvedDependency.dependency,
+        version: resolvedDependency.version,
+        options: options,
+        sdkFilter: sdkFilter
+      )
+      .on(completed: { state.modify { $0.markAsBuilt(dependency: resolvedDependency.dependency) } })
+    }
+  }
+
   /// Attempts to build each Carthage dependency that has been checked out,
   /// optionally they are limited by the given list of dependency names.
   /// Cached dependencies whose dependency trees are also cached will not
   /// be rebuilt unless otherwise specified via build options.
   ///
   /// Returns a producer-of-producers representing each scheme being built.
-  public func buildCheckedOutDependenciesWithOptions( // swiftlint:disable:this cyclomatic_complexity function_body_length
+  public func buildCheckedOutDependenciesWithOptions(
     _ options: BuildOptions,
     dependenciesToBuild: [String]? = nil,
     sdkFilter: @escaping SDKFilterCallback = { sdks, _, _, _ in .success(sdks) }
   ) -> BuildSchemeProducer {
-    return loadResolvedCartfile()
-      .flatMap(.concat) { resolvedCartfile -> SignalProducer<(Dependency, PinnedVersion), CarthageError> in
+    loadResolvedCartfile()
+      .flatMap(.race) { resolvedCartfile -> SignalProducer<BuildGraphNode, CarthageError> in
         self.buildOrderForResolvedCartfile(resolvedCartfile, dependenciesToInclude: dependenciesToBuild)
       }
-      .flatMap(.concat) { dependency, version -> SignalProducer<((Dependency, PinnedVersion), Set<Dependency>, Bool?), CarthageError> in
+      .flatMap(.concat) { node -> SignalProducer<(BuildGraphNode, Bool?), CarthageError> in
         SignalProducer.combineLatest(
-          SignalProducer(value: (dependency, version)),
-          self.dependencySet(for: dependency, version: version),
-          versionFileMatches(dependency, version: version, platforms: options.platforms, rootDirectoryURL: self.directoryURL, toolchain: options.toolchain)
+          SignalProducer(value: node),
+          versionFileMatches(node.dependency, version: node.version, platforms: options.platforms, rootDirectoryURL: self.directoryURL, toolchain: options.toolchain)
         )
       }
-      .reduce([]) { includedDependencies, nextGroup -> [(Dependency, PinnedVersion)] in
-        let (nextDependency, projects, matches) = nextGroup
-
-        var dependenciesIncludingNext = includedDependencies
-        dependenciesIncludingNext.append(nextDependency)
-
-        let projectsToBeBuilt = Set(includedDependencies.map { $0.0 })
-
-        guard options.cacheBuilds, projects.isDisjoint(with: projectsToBeBuilt) else {
-          return dependenciesIncludingNext
+      .collect()
+      .map {
+        var includedDependencies = [BuildGraphNode]()
+        var skippedDependencies = Set<Dependency>()
+        for (nextNode, matches) in $0 {
+          if self.filterDependenciesToBuild(
+            nextNode,
+            includedDependencies: includedDependencies,
+            versionFileMatches: matches,
+            cacheBuilds: options.cacheBuilds
+          ) {
+            includedDependencies.append(nextNode)
+          } else {
+            skippedDependencies.insert(nextNode.dependency)
+          }
         }
-
-        guard let versionFileMatches = matches else {
-          self._projectEventsObserver.send(value: .buildingUncached(nextDependency.0))
-          return dependenciesIncludingNext
-        }
-
-        if versionFileMatches {
-          self._projectEventsObserver.send(value: .skippedBuildingCached(nextDependency.0))
-          return includedDependencies
-        } else {
-          self._projectEventsObserver.send(value: .rebuildingCached(nextDependency.0))
-          return dependenciesIncludingNext
-        }
+        return (includedDependencies, skippedDependencies)
       }
-      .flatMap(.concat) { (dependencies: [(Dependency, PinnedVersion)]) -> SignalProducer<(Dependency, PinnedVersion), CarthageError> in
-        SignalProducer(dependencies)
-          .flatMap(.concurrent(limit: 4)) { dependency, version -> SignalProducer<(Dependency, PinnedVersion), CarthageError> in
-            switch dependency {
-              case .git, .gitHub:
-                guard options.useBinaries else {
-                  return .empty
-                }
-                return self.installBinaries(for: dependency, pinnedVersion: version, preferXCFrameworks: options.useXCFrameworks, toolchain: options.toolchain)
-                  .compactMap { installed -> (Dependency, PinnedVersion)? in
-                    installed ? (dependency, version) : nil
-                  }
-              case let .binary(binary):
-                return self.installBinariesForBinaryProject(binary: binary, pinnedVersion: version, projectName: dependency.name, toolchain: options.toolchain, preferXCFrameworks: options.useXCFrameworks)
-                  .then(.init(value: (dependency, version)))
-            }
-          }
-          .flatMap(.merge) { dependency, version -> SignalProducer<(Dependency, PinnedVersion), CarthageError> in
-            // Symlink the build folder of binary downloads for consistency with regular checkouts
-            // (even though it's not necessary since binary downloads aren't built by Carthage)
-            self.symlinkBuildPathIfNeeded(for: dependency, version: version)
-              .then(.init(value: (dependency, version)))
-          }
-          .collect()
-          .map { installedDependencies -> [(Dependency, PinnedVersion)] in
+      .flatMap(.merge) { (graph: [BuildGraphNode], skippedDependencies: Set<Dependency>) -> BuildSchemeProducer in
+        self.installBinaryDependencies(graph.map(\.resolvedDependency), options: options)
+          .flatMap(.race) { installedDependencies -> BuildSchemeProducer in
             // Filters out dependencies that we've downloaded binaries for
             // but preserves the build order
-            dependencies.filter { dependency -> Bool in
-              !installedDependencies.contains { $0 == dependency }
-            }
+            let prebuiltDependencies = skippedDependencies.union(installedDependencies.map(\.dependency))
+            return self.concurrentBuildDependencies(
+              graph.filter { !installedDependencies.contains($0.resolvedDependency) },
+              prebuiltDependencies: prebuiltDependencies,
+              options: options,
+              sdkFilter: sdkFilter
+            )
           }
-          .flatten()
       }
-      .flatMap(.concat) { dependency, version -> BuildSchemeProducer in
-        let dependencyPath = self.directoryURL.appendingPathComponent(dependency.relativePath, isDirectory: true).path
-        if !FileManager.default.fileExists(atPath: dependencyPath) {
-          return .empty
-        }
+  }
 
-        var options = options
-        let baseURL = options.derivedDataPath.flatMap(URL.init(string:)) ?? Constants.Dependency.derivedDataURL
-        let derivedDataPerXcode = baseURL.appendingPathComponent(self.xcodeVersionDirectory, isDirectory: true)
-        let derivedDataPerDependency = derivedDataPerXcode.appendingPathComponent(dependency.name, isDirectory: true)
-        let derivedDataVersioned = derivedDataPerDependency.appendingPathComponent(version.commitish, isDirectory: true)
-        options.derivedDataPath = derivedDataVersioned.resolvingSymlinksInPath().path
+  private func filterDependenciesToBuild(
+    _ nextDependency: BuildGraphNode,
+    includedDependencies: [BuildGraphNode],
+    versionFileMatches: Bool?,
+    cacheBuilds: Bool
+  ) -> Bool {
+    let projectsToBeBuilt = Set(includedDependencies.map(\.dependency))
 
-        return self.symlinkBuildPathIfNeeded(for: dependency, version: version)
-          .then(build(dependency: dependency, version: version, self.directoryURL, withOptions: options, sdkFilter: sdkFilter))
-          .flatMapError { error -> BuildSchemeProducer in
-            switch error {
-              case .noSharedFrameworkSchemes:
-                // Log that building the dependency is being skipped,
-                // not to error out with `.noSharedFrameworkSchemes`
-                // to continue building other dependencies.
-                self._projectEventsObserver.send(value: .skippedBuilding(dependency, error.description))
+    guard cacheBuilds, nextDependency.dependencies.isDisjoint(with: projectsToBeBuilt) else {
+      return true
+    }
 
-                if options.cacheBuilds {
-                  // Create a version file for a dependency with no shared schemes
-                  // so that its cache is not always considered invalid.
-                  return createVersionFileForCommitish(
-                    version.commitish,
-                    dependencyName: dependency.name,
-                    platforms: options.platforms,
-                    buildProducts: [],
-                    rootDirectoryURL: self.directoryURL
-                  )
-                  .then(BuildSchemeProducer.empty)
-                }
-                return .empty
+    guard let versionFileMatches = versionFileMatches else {
+      self._projectEventsObserver.send(value: .buildingUncached(nextDependency.dependency))
+      return true
+    }
 
-              default:
-                return SignalProducer(error: error)
+    if versionFileMatches {
+      self._projectEventsObserver.send(value: .skippedBuildingCached(nextDependency.dependency))
+      return false
+    } else {
+      self._projectEventsObserver.send(value: .rebuildingCached(nextDependency.dependency))
+      return true
+    }
+  }
+
+  private func installBinaryDependencies(
+    _ dependencies: [ResolvedDependency],
+    options: BuildOptions
+  ) -> SignalProducer<[ResolvedDependency], CarthageError> {
+    SignalProducer(dependencies)
+      .flatMap(.concurrent(limit: 4)) { resolvedDependency -> SignalProducer<ResolvedDependency, CarthageError> in
+        switch resolvedDependency.dependency {
+          case .git, .gitHub:
+            guard options.useBinaries else {
+              return .empty
             }
-          }
+            return self.installBinaries(
+              for: resolvedDependency.dependency,
+              pinnedVersion: resolvedDependency.version,
+              preferXCFrameworks: options.useXCFrameworks,
+              toolchain: options.toolchain
+            )
+            .compactMap { installed -> ResolvedDependency? in
+              installed ? resolvedDependency : nil
+            }
+          case let .binary(binary):
+            return self.installBinariesForBinaryProject(
+              binary: binary,
+              pinnedVersion: resolvedDependency.version,
+              projectName: resolvedDependency.dependency.name,
+              toolchain: options.toolchain,
+              preferXCFrameworks: options.useXCFrameworks
+            )
+            .then(SignalProducer(value: resolvedDependency))
+        }
+      }
+      .flatMap(.merge) { resolvedDependency -> SignalProducer<ResolvedDependency, CarthageError> in
+        // Symlink the build folder of binary downloads for consistency with regular checkouts
+        // (even though it's not necessary since binary downloads aren't built by Carthage)
+        self.symlinkBuildPathIfNeeded(for: resolvedDependency.dependency, version: resolvedDependency.version)
+          .then(SignalProducer(value: resolvedDependency))
+      }
+      .collect()
+  }
+
+  private func symlinkAndBuild(
+    dependency: Dependency,
+    version: PinnedVersion,
+    options: BuildOptions,
+    sdkFilter: @escaping SDKFilterCallback
+  ) -> BuildSchemeProducer {
+    let dependencyPath = self.directoryURL.appendingPathComponent(dependency.relativePath, isDirectory: true).path
+    if !FileManager.default.fileExists(atPath: dependencyPath) {
+      return .empty
+    }
+
+    var options = options
+    let baseURL = options.derivedDataPath.flatMap(URL.init(string:)) ?? Constants.Dependency.derivedDataURL
+    let derivedDataPerXcode = baseURL.appendingPathComponent(self.xcodeVersionDirectory, isDirectory: true)
+    let derivedDataPerDependency = derivedDataPerXcode.appendingPathComponent(dependency.name, isDirectory: true)
+    let derivedDataVersioned = derivedDataPerDependency.appendingPathComponent(version.commitish, isDirectory: true)
+    options.derivedDataPath = derivedDataVersioned.resolvingSymlinksInPath().path
+
+    return self.symlinkBuildPathIfNeeded(for: dependency, version: version)
+      .then(build(dependency: dependency, version: version, self.directoryURL, withOptions: options, sdkFilter: sdkFilter))
+      .flatMapError { error -> BuildSchemeProducer in
+        switch error {
+          case .noSharedFrameworkSchemes:
+            // Log that building the dependency is being skipped,
+            // not to error out with `.noSharedFrameworkSchemes`
+            // to continue building other dependencies.
+            self._projectEventsObserver.send(value: .skippedBuilding(dependency, error.description))
+
+            if options.cacheBuilds {
+              // Create a version file for a dependency with no shared schemes
+              // so that its cache is not always considered invalid.
+              return createVersionFileForCommitish(
+                version.commitish,
+                dependencyName: dependency.name,
+                platforms: options.platforms,
+                buildProducts: [],
+                rootDirectoryURL: self.directoryURL
+              )
+              .then(BuildSchemeProducer.empty)
+            }
+            return .empty
+
+          default:
+            return SignalProducer(error: error)
+        }
       }
   }
 
