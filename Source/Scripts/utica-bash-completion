@@ -1,6 +1,6 @@
-# Bash completion script for Carthage.
+# Bash completion script for Utica.
 
-_carthage() {
+_utica() {
     local commands command cur prev
     commands="archive bootstrap build checkout copy-frameworks fetch help outdated update validate version"
     command="${COMP_WORDS[1]}"
@@ -29,12 +29,14 @@ _carthage() {
             bootstrap|update)
                 COMPREPLY=($(compgen -W '--no-checkout --no-build --verbose --configuration \
                     --platform --toolchain --derived-data --use-ssh --use-submodules \
-                    --no-use-binaries --color --project-directory --cache-builds' -- ${cur}))
+                    --no-use-binaries --color --project-directory --cache-builds \
+                    --valid-simulator-archs --jobs' -- ${cur}))
                 return 0
                 ;;
             build)
                 COMPREPLY=($(compgen -W '--configuration --platform --toolchain --derived-data \
-                    --no-skip-current --color --verbose --project-directory --cache-builds' -- ${cur}))
+                    --no-skip-current --color --verbose --project-directory --cache-builds \
+                    --valid-simulator-archs --jobs' -- ${cur}))
                 return 0
                 ;;
             checkout)
@@ -84,6 +86,10 @@ _carthage() {
             _filedir -d
             return 0
             ;;
+        --valid-simulator-archs)
+            COMPREPLY=($(compgen -W 'i386 x86_64 arm64' -- ${cur}))
+            return 0
+            ;;
     esac
 }
-complete -F _carthage carthage
+complete -F _utica utica
