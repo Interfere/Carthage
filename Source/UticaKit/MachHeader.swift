@@ -69,9 +69,9 @@ extension MachHeader {
       "/usr/bin/xcrun",
       arguments: [
         "objdump",
-        "-macho",
-        "-private-header",
-        "-non-verbose",
+        "--macho",
+        "--private-header",
+        "--non-verbose",
         url.resolvingSymlinksInPath().path
       ]
     )
