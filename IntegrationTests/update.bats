@@ -2,11 +2,10 @@
 
 setup() {
     cd $BATS_TMPDIR
-    echo $BATS_TMPDIR
     rm -rf UpdateTest
     mkdir UpdateTest && cd UpdateTest
     echo 'github "antitypical/Result" == 5.0.0' > Cartfile
-    echo 'github "Quick/Nimble" == 8.0.4' > Cartfile.private
+    echo 'github "Quick/Nimble" == 10.0.0' > Cartfile.private
 }
 
 teardown() {
