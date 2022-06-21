@@ -2,6 +2,7 @@
 
 setup() {
     cd $BATS_TMPDIR
+    echo $BATS_TMPDIR
     rm -rf UpdateTest
     mkdir UpdateTest && cd UpdateTest
     echo 'github "antitypical/Result" == 5.0.0' > Cartfile

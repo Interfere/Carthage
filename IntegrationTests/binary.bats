@@ -2,7 +2,6 @@
 
 setup() {
     cd $BATS_TMPDIR
-    echo $BATS_TMPDIR
     rm -rf BinaryTest
     mkdir BinaryTest && cd BinaryTest
     echo 'binary "https://dl.google.com/dl/firebase/ios/carthage/FirebaseAnalyticsBinary.json"' > Cartfile
