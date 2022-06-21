@@ -2,6 +2,7 @@
 
 setup() {
     cd $BATS_TMPDIR
+    echo $BATS_TMPDIR
     rm -rf BinaryTest
     mkdir BinaryTest && cd BinaryTest
     echo 'binary "https://dl.google.com/dl/firebase/ios/carthage/FirebaseAnalyticsBinary.json"' > Cartfile
@@ -15,5 +16,5 @@ teardown() {
     run utica update --platform iOS --valid-simulator-archs "i386 x86_64"
 
     [ "$status" -eq 0 ]
-    [ -d Carthage/Build/iOS/Firebase.framework ]
+    [ -d Carthage/Build/FirebaseAnalytics.xcframework ]
 }
