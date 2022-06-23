@@ -14,7 +14,7 @@ teardown() {
 
 @test "utica update builds everything (binary)" {
     run utica update --platform iOS --valid-simulator-archs "i386 x86_64"
-    echo $BATS_TMPDIR
+
     [ "$status" -eq 0 ]
     [ -d Carthage/Build/FirebaseAnalytics.xcframework ]
     [ -d Carthage/Build/iOS/Appboy_iOS_SDK.framework ]
