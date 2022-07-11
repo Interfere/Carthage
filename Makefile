@@ -37,14 +37,24 @@ ifdef DISABLE_SUDO
 override SUDO:=
 endif
 
-.PHONY: all clean install package test uninstall xcconfig xcodeproj
 
-all: installables
+# HELP
+# This will output the help for each task
+# thanks to https://marmelab.com/blog/2016/02/29/auto-documented-makefile.html
+help: ## This help.
+		@echo "Usage:"
+		@echo "     make [command]\n"
+		@echo "Available commands:\n"
+		@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
-clean:
+.DEFAULT_GOAL := help
+
+all: installables ## Build executables (see installables)
+
+clean: ## Clean all package build artefacts
 	swift package clean
 
-test:
+test: ## Build and run tests
 	$(RM_SAFELY) ./.build/debug/UticaPackageTests.xctest
 	swift build --build-tests -Xswiftc -suppress-warnings
 	$(CP) -R Tests/UticaKitTests/Resources ./.build/debug/UticaPackageTests.xctest/Contents
@@ -52,10 +62,10 @@ test:
 	script/copy-fixtures ./.build/debug/UticaPackageTests.xctest/Contents/Resources
 	swift test --skip-build
 
-installables:
+installables: ## Build executables
 	swift build $(SWIFT_BUILD_FLAGS)
 
-package: installables
+package: installables ## Build package
 	$(MKDIR) "$(UTICA_TEMPORARY_FOLDER)$(BINARIES_FOLDER)"
 	$(CP) "$(UTICA_EXECUTABLE)" "$(UTICA_TEMPORARY_FOLDER)$(BINARIES_FOLDER)"
 	
@@ -71,16 +81,18 @@ package: installables
 	  	--package-path "$(INTERNAL_PACKAGE)" \
 	   	"$(OUTPUT_PACKAGE)"
 
-prefix_install: installables
+prefix_install: installables ## Build executables and install them in .build/bin folder
 	$(MKDIR) "$(BINARIES_FOLDER)"
 	$(CP) -f "$(UTICA_EXECUTABLE)" "$(BINARIES_FOLDER)/"
 
-install: installables
+install: installables ## Build executables and install them in /bin folder
 	if [ ! -d "$(BINARIES_FOLDER)" ]; then $(SUDO) $(MKDIR) "$(BINARIES_FOLDER)"; fi
 	$(SUDO) $(CP) -f "$(UTICA_EXECUTABLE)" "$(BINARIES_FOLDER)"
 
-uninstall:
+uninstall: ## Uninstall executables
 	$(RM) "$(BINARIES_FOLDER)/utica"
 	
-xcodeproj:
+xcodeproj: ## Generate Xcode project
 	 swift package generate-xcodeproj
+
+.PHONY: all clean install package test uninstall xcconfig xcodeproj
